@@ -142,16 +142,30 @@ void RenderManager::clear(Color color) {
 
 void RenderManager::updateMatrices(int width, int height) {
     projection = Mat4::Ortho(0, (float)width, (float)height, 0);
+    screenWidth = width;
+    screenHeight = height;
+}
+
+static Vec2 transformPosInternal(Vec2 pos, CoordinateSystem sys, int sw, int sh) {
+    if (sys == CoordinateSystem::NDC) return { (pos.x + 1.0f) * 0.5f * (float)sw, (1.0f - pos.y) * 0.5f * (float)sh };
+    return pos;
+}
+
+static Vec2 transformSizeInternal(Vec2 size, CoordinateSystem sys, int sw, int sh) {
+    if (sys == CoordinateSystem::NDC) return { size.x * 0.5f * (float)sw, size.y * 0.5f * (float)sh };
+    return size;
 }
 
 void RenderManager::drawRect(const PrimitiveConfig& config) {
-    float px = config.pos.x; float py = config.pos.y;
+    Vec2 p = transformPosInternal(config.pos, config.coordSystem, screenWidth, screenHeight);
+    Vec2 s = transformSizeInternal(config.size, config.coordSystem, screenWidth, screenHeight);
+    float px = p.x; float py = p.y;
     if (config.posMode == PositionMode::Static) { 
         px += scrollOffset.x; 
         py += scrollOffset.y; 
     }
-    float w = config.size.x; 
-    float h = config.size.y;
+    float w = s.x; 
+    float h = s.y;
     float vertices[] = { px, py, px+w, py, px+w, py+h, px, py, px+w, py+h, px, py+h };
     glUseProgram(sdfRectShaderProgram);
     glUniformMatrix4fv(sdfRectUniforms.projection, 1, GL_FALSE, projection.data.data());
@@ -167,11 +181,21 @@ void RenderManager::drawRect(const PrimitiveConfig& config) {
 }
 
 void RenderManager::drawCircle(const PrimitiveConfig& config, float radius, int segments) {
-    PrimitiveConfig c = config; c.size = {radius*2, radius*2}; c.pos = {config.pos.x-radius, config.pos.y-radius}; c.borderRadius = radius; drawRect(c);
+    PrimitiveConfig c = config; 
+    c.coordSystem = CoordinateSystem::Pixels;
+    Vec2 p = transformPosInternal(config.pos, config.coordSystem, screenWidth, screenHeight);
+    c.pos = {p.x - radius, p.y - radius};
+    c.size = {radius*2, radius*2};
+    c.borderRadius = radius; 
+    drawRect(c);
 }
 
 void RenderManager::drawTriangle(Vec2 p1, Vec2 p2, Vec2 p3, Color color, PositionMode mode) {
-    float x1 = p1.x, y1 = p1.y, x2 = p2.x, y2 = p2.y, x3 = p3.x, y3 = p3.y;
+    Vec2 tp1 = transformPosInternal(p1, CoordinateSystem::Pixels, screenWidth, screenHeight);
+    Vec2 tp2 = transformPosInternal(p2, CoordinateSystem::Pixels, screenWidth, screenHeight);
+    Vec2 tp3 = transformPosInternal(p3, CoordinateSystem::Pixels, screenWidth, screenHeight);
+    
+    float x1 = tp1.x, y1 = tp1.y, x2 = tp2.x, y2 = tp2.y, x3 = tp3.x, y3 = tp3.y;
     if (mode == PositionMode::Static) { 
         x1 += scrollOffset.x; 
         y1 += scrollOffset.y; 
@@ -191,64 +215,136 @@ void RenderManager::drawTriangle(Vec2 p1, Vec2 p2, Vec2 p3, Color color, Positio
     glBindVertexArray(0);
 }
 
-void RenderManager::drawText(TextManager* tm, const std::string& text, Vec2 pos, float scale, Color color, 
-                             HorizontalAlignment hAlign, VerticalAlignment vAlign, Vec2 boxSize, PositionMode mode) {
+void RenderManager::drawText(
+    TextManager* tm, 
+    const std::string& text, 
+    Vec2 pos, float scale, 
+    Color color, 
+    HorizontalAlignment hAlign, 
+    VerticalAlignment vAlign, 
+    Vec2 boxSize, 
+    PositionMode mode
+) {
     if (tm) {
-        Vec2 fp = pos; if (mode == PositionMode::Static) { fp.x += scrollOffset.x; fp.y += scrollOffset.y; }
-        tm->renderText(text, fp, scale, color, hAlign, vAlign, boxSize);
+        Vec2 fp = transformPosInternal(pos, CoordinateSystem::Pixels, screenWidth, screenHeight); 
+        Vec2 fs = transformSizeInternal(boxSize, CoordinateSystem::Pixels, screenWidth, screenHeight);
+        if (mode == PositionMode::Static) { 
+            fp.x += scrollOffset.x; 
+            fp.y += scrollOffset.y; 
+        }
+        tm->renderText(text, fp, scale, color, hAlign, vAlign, fs);
     }
 }
 
 void RenderManager::drawImage(unsigned int textureID, Vec2 pos, Vec2 size, PositionMode mode) {
-    float px = pos.x; float py = pos.y; 
-    if (mode == PositionMode::Static) { px += scrollOffset.x; py += scrollOffset.y; }
+    Vec2 p = transformPosInternal(pos, CoordinateSystem::Pixels, screenWidth, screenHeight);
+    Vec2 s = transformSizeInternal(size, CoordinateSystem::Pixels, screenWidth, screenHeight);
+    float px = p.x; 
+    float py = p.y; 
+    if (mode == PositionMode::Static) { 
+        px += scrollOffset.x; 
+        py += scrollOffset.y; 
+    }
 
-    float w = size.x, h = size.y;
+    float w = s.x, h = s.y;
     float vertices[] = { px, py, 0, 0, px+w, py, 1, 0, px+w, py+h, 1, 1, px, py, 0, 0, px+w, py+h, 1, 1, px, py+h, 0, 1 };
-    glUseProgram(textureShaderProgram); glUniformMatrix4fv(textureUniforms.projection, 1, GL_FALSE, projection.data.data());
+    glUseProgram(textureShaderProgram); 
+    glUniformMatrix4fv(textureUniforms.projection, 1, GL_FALSE, projection.data.data());
     glUniform1i(textureUniforms.textureSampler, 0);
-    glBindVertexArray(textureVao); glBindBuffer(GL_ARRAY_BUFFER, textureVbo);
+    glBindVertexArray(textureVao); 
+    glBindBuffer(GL_ARRAY_BUFFER, textureVbo);
     glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), vertices);
-    glBindTexture(GL_TEXTURE_2D, textureID); glDrawArrays(GL_TRIANGLES, 0, 6); glBindTexture(GL_TEXTURE_2D, 0); glBindVertexArray(0);
+    glBindTexture(GL_TEXTURE_2D, textureID); 
+    glDrawArrays(GL_TRIANGLES, 0, 6); 
+    glBindTexture(GL_TEXTURE_2D, 0); 
+    glBindVertexArray(0);
 }
 
 unsigned int RenderManager::loadTexture(const char* path) {
-    unsigned int id; glGenTextures(1, &id); glBindTexture(GL_TEXTURE_2D, id);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT); glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR); glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    int w, h, c; stbi_set_flip_vertically_on_load(true);
+    unsigned int id; 
+    glGenTextures(1, &id); 
+    glBindTexture(GL_TEXTURE_2D, id);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT); 
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR); 
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    int w, h, c; 
+    stbi_set_flip_vertically_on_load(true);
     unsigned char* d = stbi_load(path, &w, &h, &c, 0);
-    if (d) { GLenum f = (c == 4) ? GL_RGBA : GL_RGB; glTexImage2D(GL_TEXTURE_2D, 0, f, w, h, 0, f, GL_UNSIGNED_BYTE, d); glGenerateMipmap(GL_TEXTURE_2D); stbi_image_free(d); }
+    if (d) { 
+        GLenum f = (c == 4) ? GL_RGBA : GL_RGB; 
+        glTexImage2D(GL_TEXTURE_2D, 0, f, w, h, 0, f, GL_UNSIGNED_BYTE, d); 
+        glGenerateMipmap(GL_TEXTURE_2D); stbi_image_free(d); 
+    }
     return id;
 }
 
 unsigned int RenderManager::createShader(const char* v, const char* f) {
-    unsigned int vs = glCreateShader(GL_VERTEX_SHADER); glShaderSource(vs, 1, &v, NULL); glCompileShader(vs); checkShaderError(vs, "VS");
-    unsigned int fs = glCreateShader(GL_FRAGMENT_SHADER); glShaderSource(fs, 1, &f, NULL); glCompileShader(fs); checkShaderError(fs, "FS");
-    unsigned int p = glCreateProgram(); glAttachShader(p, vs); glAttachShader(p, fs); glLinkProgram(p); checkShaderError(p, "PROG");
-    glDeleteShader(vs); glDeleteShader(fs); return p;
+    unsigned int vs = glCreateShader(GL_VERTEX_SHADER); 
+    glShaderSource(vs, 1, &v, NULL); 
+    glCompileShader(vs); 
+    checkShaderError(vs, "VS");
+    unsigned int fs = glCreateShader(GL_FRAGMENT_SHADER); 
+    glShaderSource(fs, 1, &f, NULL); 
+    glCompileShader(fs); 
+    checkShaderError(fs, "FS");
+    unsigned int p = glCreateProgram(); 
+    glAttachShader(p, vs); 
+    glAttachShader(p, fs); 
+    glLinkProgram(p); 
+    checkShaderError(p, "PROG");
+    glDeleteShader(vs); 
+    glDeleteShader(fs); 
+    return p;
 }
 
 void RenderManager::checkShaderError(unsigned int s, std::string t) {
     int ok; char log[1024];
-    if (t != "PROG") { glGetShaderiv(s, GL_COMPILE_STATUS, &ok); if (!ok) { glGetShaderInfoLog(s, 1024, NULL, log); std::cerr << "Shader ERR " << t << ": " << log << std::endl; } }
-    else { glGetProgramiv(s, GL_LINK_STATUS, &ok); if (!ok) { glGetProgramInfoLog(s, 1024, NULL, log); std::cerr << "Program ERR: " << log << std::endl; } }
+    if (t != "PROG") { 
+        glGetShaderiv(s, GL_COMPILE_STATUS, &ok); 
+        if (!ok) { 
+            glGetShaderInfoLog(s, 1024, NULL, log); 
+            std::cerr << "Shader ERR " << t << ": " << log << std::endl; 
+        } 
+    }
+    else { 
+        glGetProgramiv(s, GL_LINK_STATUS, &ok); 
+        if (!ok) { 
+            glGetProgramInfoLog(s, 1024, NULL, log); 
+            std::cerr << "Program ERR: " << log << std::endl; 
+        } 
+    }
 }
 
 bool Shape::checkHover(const PrimitiveConfig& c) {
-    double mx, my; InputManager::getMousePos(mx, my);
-    float px = c.pos.x; float py = c.pos.y;
-    if (c.posMode == PositionMode::Static) { px += RenderManager::getInstance().getScrollOffset().x; py += RenderManager::getInstance().getScrollOffset().y; }
-    return (mx >= px && mx <= px + c.size.x && my >= py && my <= py + c.size.y);
+    double mx, my; 
+    InputManager::getMousePos(mx, my);
+    
+    Vec2 p = transformPosInternal(c.pos, c.coordSystem, RenderManager::getInstance().getScreenWidth(), RenderManager::getInstance().getScreenHeight());
+    Vec2 s = transformSizeInternal(c.size, c.coordSystem, RenderManager::getInstance().getScreenWidth(), RenderManager::getInstance().getScreenHeight());
+    
+    float px = p.x; 
+    float py = p.y;
+    if (c.posMode == PositionMode::Static) { 
+        px += RenderManager::getInstance().getScrollOffset().x; 
+        py += RenderManager::getInstance().getScrollOffset().y; 
+    }
+    return (mx >= px && mx <= px + s.x && my >= py && my <= py + s.y);
 }
 
 void Button::update(TextManager* tm) {
-    bool h = checkHover(config); bool d = InputManager::isMouseButtonDown(GLFW_MOUSE_BUTTON_LEFT);
-    config.isHovered = h; config.isPressed = h && d;
+    bool h = checkHover(config); 
+    bool d = InputManager::isMouseButtonDown(GLFW_MOUSE_BUTTON_LEFT);
+    config.isHovered = h; 
+    config.isPressed = h && d;
     if (h && !wasHoveredLastFrame && config.onHover) config.onHover();
     if (h && d && !wasMouseDownLastFrame && config.onPressDown) config.onPressDown();
-    if (wasMouseDownLastFrame && !d) { if (config.onPressUp) config.onPressUp(); if (h && config.onClick) config.onClick(); }
-    wasHoveredLastFrame = h; wasMouseDownLastFrame = d;
+    if (wasMouseDownLastFrame && !d) { 
+        if (config.onPressUp) config.onPressUp(); 
+        if (h && config.onClick) config.onClick(); 
+    }
+    wasHoveredLastFrame = h; 
+    wasMouseDownLastFrame = d;
 }
 
 void Button::draw(TextManager* tm) {
@@ -269,70 +365,114 @@ void InputField::handleKeyPress(int key, std::string& d) {
     if (config.isMultiline) {
         if (key == GLFW_KEY_ENTER) { d.insert(cursorIndex, "\n"); cursorIndex++; }
         if (key == GLFW_KEY_UP) {
-            size_t ls = d.find_last_of('\n', cursorIndex > 0 ? cursorIndex - 1 : 0); if (ls == std::string::npos) ls = 0; else ls++;
+            size_t ls = d.find_last_of('\n', cursorIndex > 0 ? cursorIndex - 1 : 0); 
+            if (ls == std::string::npos) ls = 0; 
+            else ls++;
             size_t col = cursorIndex - ls;
-            if (ls > 0) { size_t pe = ls - 1; size_t ps = d.find_last_of('\n', pe > 0 ? pe - 1 : 0); if (ps == std::string::npos) ps = 0; else ps++; cursorIndex = ps + std::min(col, pe - ps); }
+            if (ls > 0) { 
+                size_t pe = ls - 1; 
+                size_t ps = d.find_last_of('\n', pe > 0 ? pe - 1 : 0); 
+                if (ps == std::string::npos) ps = 0; 
+                else ps++; 
+                cursorIndex = ps + std::min(col, pe - ps); 
+            }
         }
         if (key == GLFW_KEY_DOWN) {
             size_t le = d.find('\n', cursorIndex);
             if (le != std::string::npos) {
-                size_t ls = d.find_last_of('\n', cursorIndex > 0 ? cursorIndex - 1 : 0); if (ls == std::string::npos) ls = 0; else ls++;
-                size_t col = cursorIndex - ls; size_t ns = le + 1; size_t ne = d.find('\n', ns); if (ne == std::string::npos) ne = d.length(); cursorIndex = ns + std::min(col, ne - ns);
+                size_t ls = d.find_last_of('\n', cursorIndex > 0 ? cursorIndex - 1 : 0); 
+                if (ls == std::string::npos) ls = 0; 
+                else ls++;
+                size_t col = cursorIndex - ls; 
+                size_t ns = le + 1; 
+                size_t ne = d.find('\n', ns); 
+                if (ne == std::string::npos) ne = d.length(); 
+                cursorIndex = ns + std::min(col, ne - ns);
             }
         }
     }
 }
 
 void InputField::update(TextManager* tm) {
+    int sw = RenderManager::getInstance().getScreenWidth();
+    int sh = RenderManager::getInstance().getScreenHeight();
+    Vec2 p = transformPosInternal(config.pos, config.coordSystem, sw, sh);
+    Vec2 s = transformSizeInternal(config.size, config.coordSystem, sw, sh);
+    
     bool hovered = checkHover(config); 
-    double mx, my; InputManager::getMousePos(mx, my); 
+    double mx, my; 
+    InputManager::getMousePos(mx, my); 
     bool mouseDown = InputManager::isMouseButtonDown(GLFW_MOUSE_BUTTON_LEFT);
 
     float m = config.internalMargin; 
     float sbW = enableScrollbar ? scrollbarWidth : 0.0f; 
-    float cw = config.size.x - 2*m - sbW;
+    float cw = s.x - 2*m - sbW;
 
     if (mouseDown && !wasMouseDownLastFrame) {
         bool previouslyFocused = isFocused; 
         isFocused = hovered;
-        if (isFocused && config.dataField) {
+        if (isFocused && config.dataField && tm) {
             std::string& d = *(config.dataField); 
             bool firstInteraction = !previouslyFocused; 
             bool useCursor = (clickBehavior == CursorClickBehavior::GotoCursor) || (clickBehavior == CursorClickBehavior::GotoCursorOnClickButEndFirst && !firstInteraction);
-            if (useCursor && tm) { 
-                Vec2 localMouse = {(float)mx - config.pos.x - m, (float)my - config.pos.y - m + scrollAmount}; 
+            if (useCursor) { 
+                Vec2 localMouse = {(float)mx - p.x - m, (float)my - p.y - m + scrollAmount}; 
                 cursorIndex = tm->getCursorIndexFromCoords(d, localMouse, config.textScale, cw); 
             }
             else if (firstInteraction) cursorIndex = d.length();
         }
     }
     if (isFocused && config.dataField) {
-        std::string& d = *(config.dataField); std::string input = InputManager::getAndClearCharBuffer(); 
+        std::string& d = *(config.dataField); 
+        std::string input = InputManager::getAndClearCharBuffer(); 
         if (!input.empty()) { 
             d.insert(cursorIndex, input); 
             cursorIndex += input.length(); 
         }
-        int ks[] = {GLFW_KEY_LEFT, GLFW_KEY_RIGHT, GLFW_KEY_UP, GLFW_KEY_DOWN, GLFW_KEY_BACKSPACE, GLFW_KEY_DELETE, GLFW_KEY_ENTER}; 
+        int ks[] = {
+            GLFW_KEY_LEFT, 
+            GLFW_KEY_RIGHT, 
+            GLFW_KEY_UP, 
+            GLFW_KEY_DOWN, 
+            GLFW_KEY_BACKSPACE, 
+            GLFW_KEY_DELETE, 
+            GLFW_KEY_ENTER
+        }; 
         double now = glfwGetTime();
         for (int k : ks) {
             if (InputManager::isKeyPressed(k)) { 
-                handleKeyPress(k, d); lastKey = k; 
-                lastKeyTime = now; lastRepeatTime = now; 
+                handleKeyPress(k, d); 
+                lastKey = k; 
+                lastKeyTime = now; 
+                lastRepeatTime = now; 
             }
             else if (InputManager::isKeyDown(k) && lastKey == k) { 
                 if (now - lastKeyTime > repeatDelay && now - lastRepeatTime > repeatRate) { 
-                    handleKeyPress(k, d); lastRepeatTime = now; 
+                    handleKeyPress(k, d); 
+                    lastRepeatTime = now; 
                 } 
             }
         }
         if (lastKey != -1 && !InputManager::isKeyDown(lastKey)) lastKey = -1;
     }
-    if (hovered) { double scroll = InputManager::getAndClearScrollDelta(); if (scroll != 0) { scrollAmount -= (float)scroll * 20.0f; if (scrollAmount < 0) scrollAmount = 0; } }
-    //SCROLLBAR CODE HERE
+    if (hovered) { 
+        double scroll = InputManager::getAndClearScrollDelta(); 
+        if (scroll != 0) { 
+            scrollAmount -= (float)scroll * 20.0f; 
+            if (scrollAmount < 0) scrollAmount = 0; 
+        } 
+    }
     if (enableScrollbar && tm && config.dataField) {
-        float sbX = config.pos.x + config.size.x - scrollbarWidth - m; bool mouseOverSB = (mx >= sbX && mx <= sbX + scrollbarWidth && my >= config.pos.y + m && my <= config.pos.y + config.size.y - m);
-        Vec2 totalSize = tm->getTextSize(*config.dataField, config.textScale); 
-        float contentH = totalSize.y; float trackH = config.size.y - 2*m; 
+        float sbX = p.x + s.x - scrollbarWidth - m; 
+        bool mouseOverSB = (
+            mx >= sbX && 
+            mx <= sbX + scrollbarWidth && 
+            my >= p.y + m && 
+            my <= p.y + s.y - m
+        );
+        Vec2 totalSize = tm->getTextSize(*config.dataField, config.textScale, cw); 
+        float contentH = totalSize.y; 
+        float trackH = s.y - 2*m; 
         float maxScroll = std::max(0.0f, contentH - trackH); 
         float thumbH = std::max(20.0f, trackH * (trackH / std::max(contentH, trackH)));
         if (mouseDown) { 
@@ -348,31 +488,55 @@ void InputField::update(TextManager* tm) {
             scrollAmount = dragScrollStart + dy * scrollRatioPerPixel; 
             scrollAmount = std::clamp(scrollAmount, 0.0f, maxScroll); 
         }
+        if (scrollAmount > maxScroll) scrollAmount = maxScroll;
     }
     wasMouseDownLastFrame = mouseDown;
 }
 
 void InputField::draw(TextManager* tm) {
-    PrimitiveConfig dCfg = config; 
-    if (isFocused) { dCfg.borderColor = {0.2f, 0.5f, 1.0f, 1.0f}; 
-    if (dCfg.borderThickness < 1.0f) dCfg.borderThickness = 2.0f; }
-    RenderManager::getInstance().drawRect(dCfg);
+    int sw = RenderManager::getInstance().getScreenWidth();
+    int sh = RenderManager::getInstance().getScreenHeight();
+    Vec2 p = transformPosInternal(config.pos, config.coordSystem, sw, sh);
+    Vec2 s = transformSizeInternal(config.size, config.coordSystem, sw, sh);
 
-    int w, h; 
-    glfwGetWindowSize(glfwGetCurrentContext(), &w, &h);
+    PrimitiveConfig dCfg = config; 
+    if (isFocused) { 
+        dCfg.borderColor = {0.2f, 0.5f, 1.0f, 1.0f}; 
+        if (dCfg.borderThickness < 1.0f) dCfg.borderThickness = 2.0f; 
+    }
+    RenderManager::getInstance().drawRect(dCfg);
 
     float m = config.internalMargin; 
     float sbW = enableScrollbar ? scrollbarWidth : 0.0f;
-    float cx = config.pos.x + m, cy = config.pos.y + m, cw = config.size.x - 2*m - sbW, ch = config.size.y - 2*m;
+    float cx = p.x + m, cy = p.y + m, cw = s.x - 2*m - sbW, ch = s.y - 2*m;
     Vec2 sOff = RenderManager::getInstance().getScrollOffset(); 
     float scx = cx, scy = cy; 
-    if (config.posMode == PositionMode::Static) { scx += sOff.x; scy += sOff.y; }
-    glEnable(GL_SCISSOR_TEST); glScissor((int)scx, (int)((float)h - (scy + ch)), (int)cw, (int)ch);
-    std::string s = (config.dataField) ? *config.dataField : "";
-    std::string ds = s; if (config.maskChar != '\0') ds = std::string(s.length(), config.maskChar);
+    if (config.posMode == PositionMode::Static) { 
+        scx += sOff.x; 
+        scy += sOff.y; 
+    }
+    glEnable(GL_SCISSOR_TEST); 
+    glScissor((int)scx, (int)((float)sh - (scy + ch)), (int)cw, (int)ch);
+    std::string text = (config.dataField) ? *config.dataField : "";
+    std::string ds = text; 
+    if (config.maskChar != '\0') ds = std::string(text.length(), config.maskChar);
+    
+    // We use Fixed for text rendering inside the scissor box because we handle positioning manually here
     Vec2 tPos = {cx, cy - scrollAmount}; 
     Vec2 tSize = enableTextWrap ? Vec2{cw, 0} : Vec2{0, 0};
-    RenderManager::getInstance().drawText(tm, ds.empty() ? config.placeholder : ds, tPos, config.textScale, ds.empty() ? Color{0.5f,0.5f,0.5f,1.0f} : config.foregroundColor, config.hAlign, config.vAlign, tSize, config.posMode);
+    
+    PrimitiveConfig textCfg;
+    textCfg.pos = tPos;
+    textCfg.size = tSize;
+    textCfg.coordSystem = CoordinateSystem::Pixels;
+    textCfg.posMode = config.posMode;
+    
+    RenderManager::getInstance().drawText(
+        tm, ds.empty() ? config.placeholder : ds, 
+        textCfg.pos, config.textScale, ds.empty() ? Color{0.5f,0.5f,0.5f,1.0f} : config.foregroundColor, 
+        config.hAlign, config.vAlign, textCfg.size, textCfg.posMode
+    );
+
     if (isFocused && tm) {
         Vec2 cc = tm->getCursorCoords(ds, cursorIndex, tPos, config.textScale, config.hAlign, config.vAlign, tSize);
         PrimitiveConfig cCfg; 
@@ -384,19 +548,23 @@ void InputField::draw(TextManager* tm) {
         cCfg.size = {2.0f, cHeight}; 
         cCfg.backgroundColor = config.foregroundColor; 
         cCfg.posMode = PositionMode::Fixed; 
+        cCfg.coordSystem = CoordinateSystem::Pixels;
         RenderManager::getInstance().drawRect(cCfg);
     }
     glDisable(GL_SCISSOR_TEST);
+
     if (enableScrollbar && tm && config.dataField) {
         PrimitiveConfig sbCfg; 
-        sbCfg.pos = {config.pos.x + config.size.x - sbW - m, config.pos.y + m}; 
-        sbCfg.size = {sbW, config.size.y - 2*m};
+        sbCfg.pos = {p.x + s.x - sbW - m, p.y + m}; 
+        sbCfg.size = {sbW, s.y - 2*m};
         sbCfg.backgroundColor = {0.2f, 0.2f, 0.2f, 1.0f}; 
-        sbCfg.borderRadius = sbW * 0.5f; sbCfg.posMode = config.posMode; 
-
+        sbCfg.borderRadius = sbW * 0.5f; 
+        sbCfg.posMode = config.posMode; 
+        sbCfg.coordSystem = CoordinateSystem::Pixels;
         RenderManager::getInstance().drawRect(sbCfg);
-        Vec2 totalSize = tm->getTextSize(*config.dataField, config.textScale); 
-        float trackH = sbCfg.size.y; 
+
+        Vec2 totalSize = tm->getTextSize(*config.dataField, config.textScale, cw);
+        float trackH = sbCfg.size.y;
         float thumbH = std::max(20.0f, trackH * (trackH / std::max(totalSize.y, trackH)));
         float maxScroll = std::max(0.0f, totalSize.y - trackH); 
         float scrollRatio = (maxScroll > 0) ? (scrollAmount / maxScroll) : 0;
@@ -405,20 +573,45 @@ void InputField::draw(TextManager* tm) {
         thumb.pos = {sbCfg.pos.x + 2, sbCfg.pos.y + 2 + scrollRatio * (trackH - thumbH - 4)};
         thumb.size = {sbW - 4, thumbH}; 
         thumb.backgroundColor = isDraggingScrollbar ? Color{0.7f,0.7f,0.7f,1.0f} : Color{0.5f,0.5f,0.5f,1.0f};
-        thumb.borderRadius = thumb.size.x * 0.5f; thumb.posMode = config.posMode; RenderManager::getInstance().drawRect(thumb);
+        thumb.borderRadius = thumb.size.x * 0.5f; 
+        thumb.posMode = config.posMode; 
+        thumb.coordSystem = CoordinateSystem::Pixels;
+        RenderManager::getInstance().drawRect(thumb);
     }
 }
 
 void Dropdown::update(TextManager* tm) {
-    bool c = checkHover(config); bool d = InputManager::isMouseButtonDown(GLFW_MOUSE_BUTTON_LEFT);
+    bool c = checkHover(config); 
+    bool d = InputManager::isMouseButtonDown(GLFW_MOUSE_BUTTON_LEFT);
     if (d && !wasMouseDownLastFrame) {
-        if (c) { isOpen = !isOpen; if (isOpen) { originalZIndex = config.zIndex; config.zIndex = 1000.0f; } else config.zIndex = originalZIndex; }
+        if (c) { isOpen = !isOpen; 
+            if (isOpen) { 
+                originalZIndex = config.zIndex; 
+                config.zIndex = 1000.0f; 
+            } 
+            else config.zIndex = originalZIndex; 
+        }
         else if (isOpen) {
-            float oh = config.size.y; bool cl = false;
+            int sw = RenderManager::getInstance().getScreenWidth();
+            int sh = RenderManager::getInstance().getScreenHeight();
+            Vec2 s = transformSizeInternal(config.size, config.coordSystem, sw, sh);
+            float oh = s.y; 
+            bool cl = false;
             for (int i = 0; i < (int)options.size(); ++i) {
-                PrimitiveConfig o = config; o.pos.y = config.pos.y + (i + 1) * oh; if (checkHover(o)) { selectedIndex = i; config.text = options[i]; if (onSelect) onSelect(i); cl = true; break; }
+                PrimitiveConfig o = config; 
+                o.pos.y = config.pos.y + (config.coordSystem == CoordinateSystem::NDC ? (i + 1) * oh / (sh * 0.5f) : (i + 1) * oh); 
+                if (checkHover(o)) { 
+                    selectedIndex = i; 
+                    config.text = options[i]; 
+                    if (onSelect) onSelect(i); 
+                    cl = true; 
+                    break; 
+                }
             }
-            if (cl || !c) { isOpen = false; config.zIndex = originalZIndex; }
+            if (cl || !c) { 
+                isOpen = false; 
+                config.zIndex = originalZIndex; 
+            }
         }
     }
     wasMouseDownLastFrame = d;
@@ -426,14 +619,30 @@ void Dropdown::update(TextManager* tm) {
 
 void Dropdown::draw(TextManager* tm) {
     RenderManager::getInstance().drawRect(config);
-    RenderManager::getInstance().drawText(tm, config.text, config.pos, config.textScale, config.foregroundColor, config.hAlign, config.vAlign, config.size, config.posMode);
+    RenderManager::getInstance().drawText(
+        tm, config.text, config.pos, config.textScale, 
+        config.foregroundColor, config.hAlign, config.vAlign, config.size, config.posMode
+    );
     if (isOpen) {
-        float oh = config.size.y;
+        int sw = RenderManager::getInstance().getScreenWidth();
+        int sh = RenderManager::getInstance().getScreenHeight();
+        Vec2 s = transformSizeInternal(config.size, config.coordSystem, sw, sh);
+        float oh = s.y;
         for (int i = 0; i < (int)options.size(); ++i) {
-            PrimitiveConfig o = config; o.pos.y = config.pos.y + (i + 1) * oh;
-            o.text = options[i]; o.backgroundColor = (selectedIndex == i) ? Color{0.3f, 0.3f, 0.3f, 1.0f} : config.backgroundColor;
+            PrimitiveConfig o = config; 
+            if (config.coordSystem == CoordinateSystem::NDC) {
+                 o.pos.y = config.pos.y - (i + 1) * (oh / (sh * 0.5f)); // NDC Y is up
+            } else {
+                 o.pos.y = config.pos.y + (i + 1) * oh;
+            }
+            o.text = options[i]; 
+            o.zIndex = config.zIndex + 1; // Ensure options are above the main box
+            o.backgroundColor = (selectedIndex == i) ? Color{0.3f, 0.3f, 0.3f, 1.0f} : config.backgroundColor;
             RenderManager::getInstance().drawRect(o);
-            RenderManager::getInstance().drawText(tm, options[i], o.pos, o.textScale, o.foregroundColor, o.hAlign, o.vAlign, o.size, o.posMode);
+            RenderManager::getInstance().drawText(
+                tm, options[i], o.pos, o.textScale, 
+                o.foregroundColor, o.hAlign, o.vAlign, o.size, o.posMode
+            );
         }
     }
 }

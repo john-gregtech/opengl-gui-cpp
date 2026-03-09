@@ -226,9 +226,9 @@ size_t TextManager::getCursorIndexFromCoords(const std::string& text, Vec2 local
     return globalIdx + lineCharIdx;
 }
 
-Vec2 TextManager::getTextSize(const std::string& text, float scale) {
+Vec2 TextManager::getTextSize(const std::string& text, float scale, float maxWidth) {
     float totalW = 0;
-    std::vector<std::string> lines = wrapText(text, 0, scale); 
+    std::vector<std::string> lines = wrapText(text, maxWidth, scale); 
     for (const auto& l : lines) {
         float lw = 0;
         for (char c : l) lw += (Characters[(unsigned char)c].Advance >> 6) * scale;

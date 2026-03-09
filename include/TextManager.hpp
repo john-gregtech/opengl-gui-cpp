@@ -24,7 +24,7 @@ public:
                     VerticalAlignment vAlign = VerticalAlignment::Top,
                     Vec2 boxSize = {0,0});
     
-    Vec2 getTextSize(const std::string& text, float scale);
+    Vec2 getTextSize(const std::string& text, float scale, float maxWidth = 0);
     
     Vec2 getCursorCoords(const std::string& text, size_t cursorIndex, Vec2 pos, float scale,
                          HorizontalAlignment hAlign = HorizontalAlignment::Left,

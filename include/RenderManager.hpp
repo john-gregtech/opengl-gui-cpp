@@ -125,6 +125,8 @@ public:
     void setScrollOffset(Vec2 offset) { scrollOffset = offset; }
     Vec2 getScrollOffset() const { return scrollOffset; }
     const Mat4& getProjection() const { return projection; }
+    int getScreenWidth() const { return screenWidth; }
+    int getScreenHeight() const { return screenHeight; }
 
 private:
     RenderManager() = default;
@@ -137,6 +139,7 @@ private:
 
     Vec2 scrollOffset = {0, 0};
     Mat4 projection;
+    int screenWidth = 0, screenHeight = 0;
     
     unsigned int createShader(const char* vertexSrc, const char* fragmentSrc);
     void checkShaderError(unsigned int shader, std::string type);
