@@ -100,17 +100,24 @@ void RenderManager::init() {
     textureShaderProgram = createShader(textureVertexShaderSource, textureFragmentShaderSource);
     sdfRectShaderProgram = createShader(sdfRectVertexShaderSource, sdfRectFragmentShaderSource);
     setupUniforms();
-    glGenVertexArrays(1, &vao); glGenBuffers(1, &vbo);
-    glBindVertexArray(vao); glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    glGenVertexArrays(1, &vao); 
+    glGenBuffers(1, &vbo);
+    glBindVertexArray(vao); 
+    glBindBuffer(GL_ARRAY_BUFFER, vbo);
     glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 12, nullptr, GL_DYNAMIC_DRAW);
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
-    glGenVertexArrays(1, &textureVao); glGenBuffers(1, &textureVbo);
-    glBindVertexArray(textureVao); glBindBuffer(GL_ARRAY_BUFFER, textureVbo);
+    glGenVertexArrays(1, &textureVao); 
+    glGenBuffers(1, &textureVbo);
+    glBindVertexArray(textureVao);
+    glBindBuffer(GL_ARRAY_BUFFER, textureVbo);
     glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 24, nullptr, GL_DYNAMIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0); glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float))); glEnableVertexAttribArray(1);
-    glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0); 
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float))); 
+    glEnableVertexAttribArray(1);
+    glEnable(GL_BLEND); 
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glBindVertexArray(0);
 }
 
@@ -129,7 +136,8 @@ void RenderManager::setupUniforms() {
 }
 
 void RenderManager::clear(Color color) {
-    glClearColor(color.r, color.g, color.b, color.a); glClear(GL_COLOR_BUFFER_BIT);
+    glClearColor(color.r, color.g, color.b, color.a); 
+    glClear(GL_COLOR_BUFFER_BIT);
 }
 
 void RenderManager::updateMatrices(int width, int height) {
@@ -138,8 +146,12 @@ void RenderManager::updateMatrices(int width, int height) {
 
 void RenderManager::drawRect(const PrimitiveConfig& config) {
     float px = config.pos.x; float py = config.pos.y;
-    if (config.posMode == PositionMode::Static) { px += scrollOffset.x; py += scrollOffset.y; }
-    float w = config.size.x; float h = config.size.y;
+    if (config.posMode == PositionMode::Static) { 
+        px += scrollOffset.x; 
+        py += scrollOffset.y; 
+    }
+    float w = config.size.x; 
+    float h = config.size.y;
     float vertices[] = { px, py, px+w, py, px+w, py+h, px, py, px+w, py+h, px, py+h };
     glUseProgram(sdfRectShaderProgram);
     glUniformMatrix4fv(sdfRectUniforms.projection, 1, GL_FALSE, projection.data.data());
@@ -160,13 +172,23 @@ void RenderManager::drawCircle(const PrimitiveConfig& config, float radius, int 
 
 void RenderManager::drawTriangle(Vec2 p1, Vec2 p2, Vec2 p3, Color color, PositionMode mode) {
     float x1 = p1.x, y1 = p1.y, x2 = p2.x, y2 = p2.y, x3 = p3.x, y3 = p3.y;
-    if (mode == PositionMode::Static) { x1 += scrollOffset.x; y1 += scrollOffset.y; x2 += scrollOffset.x; y2 += scrollOffset.y; x3 += scrollOffset.x; y3 += scrollOffset.y; }
+    if (mode == PositionMode::Static) { 
+        x1 += scrollOffset.x; 
+        y1 += scrollOffset.y; 
+        x2 += scrollOffset.x; 
+        y2 += scrollOffset.y; 
+        x3 += scrollOffset.x; 
+        y3 += scrollOffset.y; 
+    }
     float vertices[] = { x1, y1, x2, y2, x3, y3 };
-    glUseProgram(shaderProgram); glUniformMatrix4fv(basicUniforms.projection, 1, GL_FALSE, projection.data.data());
+    glUseProgram(shaderProgram); 
+    glUniformMatrix4fv(basicUniforms.projection, 1, GL_FALSE, projection.data.data());
     glUniform4f(basicUniforms.color, color.r, color.g, color.b, color.a);
-    glBindVertexArray(vao); glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    glBindVertexArray(vao); 
+    glBindBuffer(GL_ARRAY_BUFFER, vbo);
     glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), vertices);
-    glDrawArrays(GL_TRIANGLES, 0, 3); glBindVertexArray(0);
+    glDrawArrays(GL_TRIANGLES, 0, 3); 
+    glBindVertexArray(0);
 }
 
 void RenderManager::drawText(TextManager* tm, const std::string& text, Vec2 pos, float scale, Color color, 
@@ -178,7 +200,9 @@ void RenderManager::drawText(TextManager* tm, const std::string& text, Vec2 pos,
 }
 
 void RenderManager::drawImage(unsigned int textureID, Vec2 pos, Vec2 size, PositionMode mode) {
-    float px = pos.x; float py = pos.y; if (mode == PositionMode::Static) { px += scrollOffset.x; py += scrollOffset.y; }
+    float px = pos.x; float py = pos.y; 
+    if (mode == PositionMode::Static) { px += scrollOffset.x; py += scrollOffset.y; }
+
     float w = size.x, h = size.y;
     float vertices[] = { px, py, 0, 0, px+w, py, 1, 0, px+w, py+h, 1, 1, px, py, 0, 0, px+w, py+h, 1, 1, px, py+h, 0, 1 };
     glUseProgram(textureShaderProgram); glUniformMatrix4fv(textureUniforms.projection, 1, GL_FALSE, projection.data.data());
@@ -260,60 +284,127 @@ void InputField::handleKeyPress(int key, std::string& d) {
 }
 
 void InputField::update(TextManager* tm) {
-    bool hovered = checkHover(config); double mx, my; InputManager::getMousePos(mx, my); bool mouseDown = InputManager::isMouseButtonDown(GLFW_MOUSE_BUTTON_LEFT);
-    float m = config.internalMargin; float sbW = enableScrollbar ? scrollbarWidth : 0.0f; float cw = config.size.x - 2*m - sbW;
+    bool hovered = checkHover(config); 
+    double mx, my; InputManager::getMousePos(mx, my); 
+    bool mouseDown = InputManager::isMouseButtonDown(GLFW_MOUSE_BUTTON_LEFT);
+
+    float m = config.internalMargin; 
+    float sbW = enableScrollbar ? scrollbarWidth : 0.0f; 
+    float cw = config.size.x - 2*m - sbW;
+
     if (mouseDown && !wasMouseDownLastFrame) {
-        bool previouslyFocused = isFocused; isFocused = hovered;
+        bool previouslyFocused = isFocused; 
+        isFocused = hovered;
         if (isFocused && config.dataField) {
-            std::string& d = *(config.dataField); bool firstInteraction = !previouslyFocused; bool useCursor = (clickBehavior == CursorClickBehavior::GotoCursor) || (clickBehavior == CursorClickBehavior::GotoCursorOnClickButEndFirst && !firstInteraction);
-            if (useCursor && tm) { Vec2 localMouse = {(float)mx - config.pos.x - m, (float)my - config.pos.y - m + scrollAmount}; cursorIndex = tm->getCursorIndexFromCoords(d, localMouse, config.textScale, cw); }
+            std::string& d = *(config.dataField); 
+            bool firstInteraction = !previouslyFocused; 
+            bool useCursor = (clickBehavior == CursorClickBehavior::GotoCursor) || (clickBehavior == CursorClickBehavior::GotoCursorOnClickButEndFirst && !firstInteraction);
+            if (useCursor && tm) { 
+                Vec2 localMouse = {(float)mx - config.pos.x - m, (float)my - config.pos.y - m + scrollAmount}; 
+                cursorIndex = tm->getCursorIndexFromCoords(d, localMouse, config.textScale, cw); 
+            }
             else if (firstInteraction) cursorIndex = d.length();
         }
     }
     if (isFocused && config.dataField) {
-        std::string& d = *(config.dataField); std::string input = InputManager::getAndClearCharBuffer(); if (!input.empty()) { d.insert(cursorIndex, input); cursorIndex += input.length(); }
-        int ks[] = {GLFW_KEY_LEFT, GLFW_KEY_RIGHT, GLFW_KEY_UP, GLFW_KEY_DOWN, GLFW_KEY_BACKSPACE, GLFW_KEY_DELETE, GLFW_KEY_ENTER}; double now = glfwGetTime();
+        std::string& d = *(config.dataField); std::string input = InputManager::getAndClearCharBuffer(); 
+        if (!input.empty()) { 
+            d.insert(cursorIndex, input); 
+            cursorIndex += input.length(); 
+        }
+        int ks[] = {GLFW_KEY_LEFT, GLFW_KEY_RIGHT, GLFW_KEY_UP, GLFW_KEY_DOWN, GLFW_KEY_BACKSPACE, GLFW_KEY_DELETE, GLFW_KEY_ENTER}; 
+        double now = glfwGetTime();
         for (int k : ks) {
-            if (InputManager::isKeyPressed(k)) { handleKeyPress(k, d); lastKey = k; lastKeyTime = now; lastRepeatTime = now; }
-            else if (InputManager::isKeyDown(k) && lastKey == k) { if (now - lastKeyTime > repeatDelay && now - lastRepeatTime > repeatRate) { handleKeyPress(k, d); lastRepeatTime = now; } }
+            if (InputManager::isKeyPressed(k)) { 
+                handleKeyPress(k, d); lastKey = k; 
+                lastKeyTime = now; lastRepeatTime = now; 
+            }
+            else if (InputManager::isKeyDown(k) && lastKey == k) { 
+                if (now - lastKeyTime > repeatDelay && now - lastRepeatTime > repeatRate) { 
+                    handleKeyPress(k, d); lastRepeatTime = now; 
+                } 
+            }
         }
         if (lastKey != -1 && !InputManager::isKeyDown(lastKey)) lastKey = -1;
     }
     if (hovered) { double scroll = InputManager::getAndClearScrollDelta(); if (scroll != 0) { scrollAmount -= (float)scroll * 20.0f; if (scrollAmount < 0) scrollAmount = 0; } }
+    //SCROLLBAR CODE HERE
     if (enableScrollbar && tm && config.dataField) {
         float sbX = config.pos.x + config.size.x - scrollbarWidth - m; bool mouseOverSB = (mx >= sbX && mx <= sbX + scrollbarWidth && my >= config.pos.y + m && my <= config.pos.y + config.size.y - m);
-        Vec2 totalSize = tm->getTextSize(*config.dataField, config.textScale); float contentH = totalSize.y; float trackH = config.size.y - 2*m; float maxScroll = std::max(0.0f, contentH - trackH); float thumbH = std::max(20.0f, trackH * (trackH / std::max(contentH, trackH)));
-        if (mouseDown) { if (!wasMouseDownLastFrame && mouseOverSB) { isDraggingScrollbar = true; dragMouseStart = (float)my; dragScrollStart = scrollAmount; } } else isDraggingScrollbar = false;
-        if (isDraggingScrollbar && maxScroll > 0) { float dy = (float)my - dragMouseStart; float scrollRatioPerPixel = maxScroll / (trackH - thumbH); scrollAmount = dragScrollStart + dy * scrollRatioPerPixel; scrollAmount = std::clamp(scrollAmount, 0.0f, maxScroll); }
+        Vec2 totalSize = tm->getTextSize(*config.dataField, config.textScale); 
+        float contentH = totalSize.y; float trackH = config.size.y - 2*m; 
+        float maxScroll = std::max(0.0f, contentH - trackH); 
+        float thumbH = std::max(20.0f, trackH * (trackH / std::max(contentH, trackH)));
+        if (mouseDown) { 
+            if (!wasMouseDownLastFrame && mouseOverSB) { 
+                isDraggingScrollbar = true; 
+                dragMouseStart = (float)my; 
+                dragScrollStart = scrollAmount; 
+            } 
+        } else isDraggingScrollbar = false;
+        if (isDraggingScrollbar && maxScroll > 0) { 
+            float dy = (float)my - dragMouseStart; 
+            float scrollRatioPerPixel = maxScroll / (trackH - thumbH); 
+            scrollAmount = dragScrollStart + dy * scrollRatioPerPixel; 
+            scrollAmount = std::clamp(scrollAmount, 0.0f, maxScroll); 
+        }
     }
     wasMouseDownLastFrame = mouseDown;
 }
 
 void InputField::draw(TextManager* tm) {
-    PrimitiveConfig dCfg = config; if (isFocused) { dCfg.borderColor = {0.2f, 0.5f, 1.0f, 1.0f}; if (dCfg.borderThickness < 1.0f) dCfg.borderThickness = 2.0f; }
+    PrimitiveConfig dCfg = config; 
+    if (isFocused) { dCfg.borderColor = {0.2f, 0.5f, 1.0f, 1.0f}; 
+    if (dCfg.borderThickness < 1.0f) dCfg.borderThickness = 2.0f; }
     RenderManager::getInstance().drawRect(dCfg);
-    int w, h; glfwGetWindowSize(glfwGetCurrentContext(), &w, &h);
-    float m = config.internalMargin; float sbW = enableScrollbar ? scrollbarWidth : 0.0f;
+
+    int w, h; 
+    glfwGetWindowSize(glfwGetCurrentContext(), &w, &h);
+
+    float m = config.internalMargin; 
+    float sbW = enableScrollbar ? scrollbarWidth : 0.0f;
     float cx = config.pos.x + m, cy = config.pos.y + m, cw = config.size.x - 2*m - sbW, ch = config.size.y - 2*m;
-    Vec2 sOff = RenderManager::getInstance().getScrollOffset(); float scx = cx, scy = cy; if (config.posMode == PositionMode::Static) { scx += sOff.x; scy += sOff.y; }
+    Vec2 sOff = RenderManager::getInstance().getScrollOffset(); 
+    float scx = cx, scy = cy; 
+    if (config.posMode == PositionMode::Static) { scx += sOff.x; scy += sOff.y; }
     glEnable(GL_SCISSOR_TEST); glScissor((int)scx, (int)((float)h - (scy + ch)), (int)cw, (int)ch);
-    std::string s = (config.dataField) ? *config.dataField : ""; std::string ds = s; if (config.maskChar != '\0') ds = std::string(s.length(), config.maskChar);
-    Vec2 tPos = {cx, cy - scrollAmount}; Vec2 tSize = enableTextWrap ? Vec2{cw, 0} : Vec2{0, 0};
+    std::string s = (config.dataField) ? *config.dataField : "";
+    std::string ds = s; if (config.maskChar != '\0') ds = std::string(s.length(), config.maskChar);
+    Vec2 tPos = {cx, cy - scrollAmount}; 
+    Vec2 tSize = enableTextWrap ? Vec2{cw, 0} : Vec2{0, 0};
     RenderManager::getInstance().drawText(tm, ds.empty() ? config.placeholder : ds, tPos, config.textScale, ds.empty() ? Color{0.5f,0.5f,0.5f,1.0f} : config.foregroundColor, config.hAlign, config.vAlign, tSize, config.posMode);
     if (isFocused && tm) {
         Vec2 cc = tm->getCursorCoords(ds, cursorIndex, tPos, config.textScale, config.hAlign, config.vAlign, tSize);
-        PrimitiveConfig cCfg; cc.x += (config.posMode == PositionMode::Static ? sOff.x : 0); cc.y += (config.posMode == PositionMode::Static ? sOff.y : 0);
-        float cHeight = tm->getLineHeight() * config.textScale * 0.8f; cCfg.pos = {cc.x, cc.y + (tm->getLineHeight() * config.textScale - cHeight) * 0.5f};
-        cCfg.size = {2.0f, cHeight}; cCfg.backgroundColor = config.foregroundColor; cCfg.posMode = PositionMode::Fixed; RenderManager::getInstance().drawRect(cCfg);
+        PrimitiveConfig cCfg; 
+        cc.x += (config.posMode == PositionMode::Static ? sOff.x : 0); 
+        cc.y += (config.posMode == PositionMode::Static ? sOff.y : 0);
+
+        float cHeight = tm->getLineHeight() * config.textScale * 0.8f; 
+        cCfg.pos = {cc.x, cc.y + (tm->getLineHeight() * config.textScale - cHeight) * 0.5f};
+        cCfg.size = {2.0f, cHeight}; 
+        cCfg.backgroundColor = config.foregroundColor; 
+        cCfg.posMode = PositionMode::Fixed; 
+        RenderManager::getInstance().drawRect(cCfg);
     }
     glDisable(GL_SCISSOR_TEST);
     if (enableScrollbar && tm && config.dataField) {
-        PrimitiveConfig sbCfg; sbCfg.pos = {config.pos.x + config.size.x - sbW - m, config.pos.y + m}; sbCfg.size = {sbW, config.size.y - 2*m};
-        sbCfg.backgroundColor = {0.2f, 0.2f, 0.2f, 1.0f}; sbCfg.borderRadius = sbW * 0.5f; sbCfg.posMode = config.posMode; RenderManager::getInstance().drawRect(sbCfg);
-        Vec2 totalSize = tm->getTextSize(*config.dataField, config.textScale); float trackH = sbCfg.size.y; float thumbH = std::max(20.0f, trackH * (trackH / std::max(totalSize.y, trackH)));
-        float maxScroll = std::max(0.0f, totalSize.y - trackH); float scrollRatio = (maxScroll > 0) ? (scrollAmount / maxScroll) : 0;
-        PrimitiveConfig thumb; thumb.pos = {sbCfg.pos.x + 2, sbCfg.pos.y + 2 + scrollRatio * (trackH - thumbH - 4)};
-        thumb.size = {sbW - 4, thumbH}; thumb.backgroundColor = isDraggingScrollbar ? Color{0.7f,0.7f,0.7f,1.0f} : Color{0.5f,0.5f,0.5f,1.0f};
+        PrimitiveConfig sbCfg; 
+        sbCfg.pos = {config.pos.x + config.size.x - sbW - m, config.pos.y + m}; 
+        sbCfg.size = {sbW, config.size.y - 2*m};
+        sbCfg.backgroundColor = {0.2f, 0.2f, 0.2f, 1.0f}; 
+        sbCfg.borderRadius = sbW * 0.5f; sbCfg.posMode = config.posMode; 
+
+        RenderManager::getInstance().drawRect(sbCfg);
+        Vec2 totalSize = tm->getTextSize(*config.dataField, config.textScale); 
+        float trackH = sbCfg.size.y; 
+        float thumbH = std::max(20.0f, trackH * (trackH / std::max(totalSize.y, trackH)));
+        float maxScroll = std::max(0.0f, totalSize.y - trackH); 
+        float scrollRatio = (maxScroll > 0) ? (scrollAmount / maxScroll) : 0;
+
+        PrimitiveConfig thumb; 
+        thumb.pos = {sbCfg.pos.x + 2, sbCfg.pos.y + 2 + scrollRatio * (trackH - thumbH - 4)};
+        thumb.size = {sbW - 4, thumbH}; 
+        thumb.backgroundColor = isDraggingScrollbar ? Color{0.7f,0.7f,0.7f,1.0f} : Color{0.5f,0.5f,0.5f,1.0f};
         thumb.borderRadius = thumb.size.x * 0.5f; thumb.posMode = config.posMode; RenderManager::getInstance().drawRect(thumb);
     }
 }
