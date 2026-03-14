@@ -153,7 +153,7 @@ std::vector<std::string> TextManager::wrapText(const std::string& text, float ma
     if (maxWidth <= 0) {
         std::string current;
         for (char c : text) {
-            if (c == '\n') { lines.push_back(current); current = ""; }
+            if (c == '\n') { lines.push_back(current + "\n"); current = ""; }
             else current += c;
         }
         lines.push_back(current);
@@ -167,7 +167,7 @@ std::vector<std::string> TextManager::wrapText(const std::string& text, float ma
 
     for (char c : text) {
         if (c == '\n') {
-            lines.push_back(currentLine + currentWord);
+            lines.push_back(currentLine + currentWord + "\n");
             currentLine = ""; currentWord = "";
             currentW = 0; wordW = 0;
             continue;
@@ -204,7 +204,7 @@ std::vector<std::string> TextManager::wrapText(const std::string& text, float ma
     return lines;
 }
 
-size_t TextManager::getCursorIndexFromCoords(const std::string& text, Vec2 localMousePos, float scale, float maxWidth) {
+size_t TextManager::getCursorIndexFromCoords(const std::string& text, Vec2 localMousePos, float scale, float maxWidth, HorizontalAlignment hAlign) {
     std::vector<std::string> lines = wrapText(text, maxWidth, scale);
     float unitH = lineHeight * scale;
     int lineIdx = (int)(localMousePos.y / unitH);
@@ -212,12 +212,24 @@ size_t TextManager::getCursorIndexFromCoords(const std::string& text, Vec2 local
     if (lineIdx >= (int)lines.size()) lineIdx = (int)lines.size() - 1;
 
     size_t globalIdx = 0;
-    for (int i = 0; i < lineIdx; ++i) globalIdx += lines[i].length() + 1;
+    for (int i = 0; i < lineIdx; ++i) globalIdx += lines[i].length();
 
     const std::string& targetLine = lines[lineIdx];
-    float currentX = 0;
+    float startX = 0;
+    if (maxWidth > 0) {
+        float lw = 0;
+        for (char c : targetLine) {
+            if (c == '\n') continue;
+            lw += (Characters[(unsigned char)c].Advance >> 6) * scale;
+        }
+        if (hAlign == HorizontalAlignment::Center) startX = (maxWidth - lw) * 0.5f;
+        else if (hAlign == HorizontalAlignment::Right) startX = maxWidth - lw;
+    }
+
+    float currentX = startX;
     size_t lineCharIdx = 0;
     for (char c : targetLine) {
+        if (c == '\n') break;
         float advance = (Characters[(unsigned char)c].Advance >> 6) * scale;
         if (currentX + advance * 0.5f > localMousePos.x) break;
         currentX += advance;
@@ -231,7 +243,10 @@ Vec2 TextManager::getTextSize(const std::string& text, float scale, float maxWid
     std::vector<std::string> lines = wrapText(text, maxWidth, scale); 
     for (const auto& l : lines) {
         float lw = 0;
-        for (char c : l) lw += (Characters[(unsigned char)c].Advance >> 6) * scale;
+        for (char c : l) {
+            if (c == '\n') continue;
+            lw += (Characters[(unsigned char)c].Advance >> 6) * scale;
+        }
         totalW = std::max(totalW, lw);
     }
     return {totalW, (float)lines.size() * lineHeight * scale};
@@ -256,16 +271,22 @@ Vec2 TextManager::getCursorCoords(const std::string& text, size_t cursorIndex, V
             float curX = pos.x;
             if (boxSize.x > 0) {
                 float lw = 0;
-                for(char c : l) lw += (Characters[(unsigned char)c].Advance >> 6) * scale;
+                for(char c : l) {
+                    if (c == '\n') continue;
+                    lw += (Characters[(unsigned char)c].Advance >> 6) * scale;
+                }
                 if (hAlign == HorizontalAlignment::Center) curX = pos.x + (boxSize.x - lw) * 0.5f;
                 else if (hAlign == HorizontalAlignment::Right) curX = pos.x + (boxSize.x - lw);
             }
             float xOff = 0;
             std::string sub = l.substr(0, cursorIndex - curIdx);
-            for(char c : sub) xOff += (Characters[(unsigned char)c].Advance >> 6) * scale;
+            for(char c : sub) {
+                if (c == '\n') break;
+                xOff += (Characters[(unsigned char)c].Advance >> 6) * scale;
+            }
             return {curX + xOff, curY};
         }
-        curIdx += l.length() + 1;
+        curIdx += l.length();
         curY += unitH;
     }
     return {pos.x, curY};
@@ -303,13 +324,17 @@ void TextManager::renderText(const std::string& text, Vec2 pos, float scale, Col
         float curX = pos.x;
         if (boxSize.x > 0) {
             float lw = 0;
-            for(char c : l) lw += (Characters[(unsigned char)c].Advance >> 6) * scale;
+            for(char c : l) {
+                if (c == '\n') continue;
+                lw += (Characters[(unsigned char)c].Advance >> 6) * scale;
+            }
             if (hAlign == HorizontalAlignment::Center) curX = pos.x + (boxSize.x - lw) * 0.5f;
             else if (hAlign == HorizontalAlignment::Right) curX = pos.x + (boxSize.x - lw);
         }
 
         float x = curX;
         for (char c : l) {
+            if (c == '\n') continue;
             const Character& ch = Characters[(unsigned char)c];
             float xpos = x + ch.Bearing.x * scale;
             float ypos = curY + (lineHeight - ch.Bearing.y) * scale;

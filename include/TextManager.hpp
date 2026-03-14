@@ -31,7 +31,7 @@ public:
                          VerticalAlignment vAlign = VerticalAlignment::Top,
                          Vec2 boxSize = {0,0});
 
-    size_t getCursorIndexFromCoords(const std::string& text, Vec2 localMousePos, float scale, float maxWidth);
+    size_t getCursorIndexFromCoords(const std::string& text, Vec2 localMousePos, float scale, float maxWidth, HorizontalAlignment hAlign = HorizontalAlignment::Left);
 
     float getLineHeight() const { return lineHeight; }
 

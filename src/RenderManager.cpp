@@ -398,6 +398,7 @@ void InputField::update(TextManager* tm) {
     int sh = RenderManager::getInstance().getScreenHeight();
     Vec2 p = transformPosInternal(config.pos, config.coordSystem, sw, sh);
     Vec2 s = transformSizeInternal(config.size, config.coordSystem, sw, sh);
+    Vec2 sOff = RenderManager::getInstance().getScrollOffset();
     
     bool hovered = checkHover(config); 
     double mx, my; 
@@ -413,11 +414,16 @@ void InputField::update(TextManager* tm) {
         isFocused = hovered;
         if (isFocused && config.dataField && tm) {
             std::string& d = *(config.dataField); 
+            std::string ds = d;
+            if (config.maskChar != '\0') ds = std::string(d.length(), config.maskChar);
+            
             bool firstInteraction = !previouslyFocused; 
             bool useCursor = (clickBehavior == CursorClickBehavior::GotoCursor) || (clickBehavior == CursorClickBehavior::GotoCursorOnClickButEndFirst && !firstInteraction);
             if (useCursor) { 
-                Vec2 localMouse = {(float)mx - p.x - m, (float)my - p.y - m + scrollAmount}; 
-                cursorIndex = tm->getCursorIndexFromCoords(d, localMouse, config.textScale, cw); 
+                float ox = (config.posMode == PositionMode::Static ? sOff.x : 0);
+                float oy = (config.posMode == PositionMode::Static ? sOff.y : 0);
+                Vec2 localMouse = {(float)mx - p.x - ox - m, (float)my - p.y - oy - m + scrollAmount}; 
+                cursorIndex = tm->getCursorIndexFromCoords(ds, localMouse, config.textScale, cw, config.hAlign); 
             }
             else if (firstInteraction) cursorIndex = d.length();
         }
@@ -463,12 +469,14 @@ void InputField::update(TextManager* tm) {
         } 
     }
     if (enableScrollbar && tm && config.dataField) {
-        float sbX = p.x + s.x - scrollbarWidth - m; 
+        float ox = (config.posMode == PositionMode::Static ? sOff.x : 0);
+        float oy = (config.posMode == PositionMode::Static ? sOff.y : 0);
+        float sbX = p.x + ox + s.x - scrollbarWidth - m; 
         bool mouseOverSB = (
             mx >= sbX && 
             mx <= sbX + scrollbarWidth && 
-            my >= p.y + m && 
-            my <= p.y + s.y - m
+            my >= p.y + oy + m && 
+            my <= p.y + oy + s.y - m
         );
         Vec2 totalSize = tm->getTextSize(*config.dataField, config.textScale, cw); 
         float contentH = totalSize.y; 
@@ -521,7 +529,6 @@ void InputField::draw(TextManager* tm) {
     std::string ds = text; 
     if (config.maskChar != '\0') ds = std::string(text.length(), config.maskChar);
     
-    // We use Fixed for text rendering inside the scissor box because we handle positioning manually here
     Vec2 tPos = {cx, cy - scrollAmount}; 
     Vec2 tSize = enableTextWrap ? Vec2{cw, 0} : Vec2{0, 0};
     
@@ -539,13 +546,15 @@ void InputField::draw(TextManager* tm) {
 
     if (isFocused && tm) {
         Vec2 cc = tm->getCursorCoords(ds, cursorIndex, tPos, config.textScale, config.hAlign, config.vAlign, tSize);
-        PrimitiveConfig cCfg; 
-        cc.x += (config.posMode == PositionMode::Static ? sOff.x : 0); 
-        cc.y += (config.posMode == PositionMode::Static ? sOff.y : 0);
+        if (config.posMode == PositionMode::Static) {
+            cc.x += sOff.x;
+            cc.y += sOff.y;
+        }
 
-        float cHeight = tm->getLineHeight() * config.textScale * 0.8f; 
-        cCfg.pos = {cc.x, cc.y + (tm->getLineHeight() * config.textScale - cHeight) * 0.5f};
-        cCfg.size = {2.0f, cHeight}; 
+        float unitH = tm->getLineHeight() * config.textScale;
+        PrimitiveConfig cCfg; 
+        cCfg.pos = {cc.x, cc.y};
+        cCfg.size = {2.0f, unitH}; 
         cCfg.backgroundColor = config.foregroundColor; 
         cCfg.posMode = PositionMode::Fixed; 
         cCfg.coordSystem = CoordinateSystem::Pixels;
